@@ -36,8 +36,10 @@ Follow this guide to set up the campaign shell.
   <Step title="Step 3: Telephony Rules">
     Since API calls happen in real-time, these guardrails are critical to ensure compliance and high connection rates.
 
-    * **DND Hours:** Define "Do Not Call" windows (e.g., 9 PM - 9 AM).
-      * *Action:* Configure the system to either **Discard** the call or **Schedule for later** if triggered during DND.
+    * **Working Window:** Enable the **Working window** toggle to restrict calls to specific hours. Choose between two modes:
+      * **Custom** — Manually set a start and end time (HH:MM) for when calls are allowed.
+      * **Business hours** — Select a pre-configured business hours profile (e.g., *Global Business Hours*) from the dropdown.
+      * *During DND hours:* Choose to **Reschedule after DND** (calls are queued for the next available slot) or **Discard the call** (calls are permanently dropped). Rescheduling is recommended to reduce voicemail drops.
     
     * **Ring Duration:** Set the maximum ring time (15-30 seconds) to avoid voicemail boxes.
 
@@ -54,9 +56,115 @@ Follow this guide to set up the campaign shell.
 
 ## Developer Integration
 
-Once published, use the **Campaign ID** from the dashboard to trigger calls.
+Once published, use the **Campaign ID** from the dashboard to trigger calls via the SendMessage API.
+
+### Authentication
+
+A valid auth token is required for all API requests. The token will be shared separately over email or via the dashboard UI. Include it in the `Authorization` header with every request.
+
+If you send an incorrect, expired, or revoked auth token, the API responds with status `401`:
+
+```json
+{
+  "code": "unauthenticated",
+  "msg": "Authentication required"
+}
+```
+
+### Endpoint
+
+```
+POST https://<your-domain>.verloop.io/api/v1/Campaign/SendMessage
+```
+
+Replace `<your-domain>` with your Client ID — the subdomain from your Verloop dashboard URL. For example, if your dashboard is at `https://app.verloop.io`, the endpoint would be:
+
+```
+POST https://app.verloop.io/api/v1/Campaign/SendMessage
+```
+
+### Request Body
+
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `CampaignID` | string (UUID) | Yes | The Campaign ID from your Outreach dashboard. |
+| `To.PhoneNumber` | string | Yes | The recipient's phone number including country code (e.g., `918123002929`). |
+| `Variables` | object | No | Key-value pairs for custom variables used in the Recipe (e.g., `customer_id`, `customer_type`). |
+| `Callback.URL` | string | No | A webhook URL to receive call status updates. |
+| `Callback.State` | object | No | Arbitrary key-value pairs passed back to your webhook for correlation. |
+| `ScheduledAt` | object | Yes | Schedule the call for a specific date and time. See [Scheduling Calls](#scheduling-calls) below. |
+
+### Scheduling Calls
+
+Use the `ScheduledAt` object to schedule a call for a specific date and time.
+
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `ScheduledAt.Time` | string (ISO 8601) | Yes | The date and time to place the call. See supported formats below. |
+| `ScheduledAt.BypassCallingWindow` | boolean | No | When `true`, the call is placed at the scheduled time regardless of any DND / Working Window configured on the campaign. Defaults to `false`. |
+
+**Supported time formats for `ScheduledAt.Time`:**
+
+| Format | Example | Behavior |
+| :--- | :--- | :--- |
+| UTC | `2026-03-04T10:15:30Z` | Interpreted as UTC. |
+| With offset | `2026-03-04T15:45:30+05:30` | Interpreted using the provided UTC offset. |
+| Without offset | `2026-03-04T15:45:30` | Interpreted using your dashboard's configured timezone. |
+
+<Warning>
+  When `BypassCallingWindow` is set to `true`, the call will be placed at the exact scheduled time even if it falls outside your campaign's Working Window / DND hours. Use this with caution to avoid calling recipients during restricted hours.
+</Warning>
+
+### Example Request
+
+```bash
+curl -X POST 'https://app.verloop.io/api/v1/Campaign/SendMessage' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: <your-auth-token>' \
+  --data '{
+    "CampaignID": "ac3bf462-ec44-46d4-9e8e-8edda9cffe58",
+    "To": {
+        "PhoneNumber": "918123002929"
+    },
+    "Variables": {
+        "customer_id": "my_customer_id",
+        "customer_type": "vip"
+    },
+    "Callback": {
+        "URL": "https://your-webhook-url.com/callback",
+        "State": {
+            "order_id": "12345",
+            "source": "crm"
+        }
+    },
+    "ScheduledAt": {
+        "Time": "2026-03-04T11:52:30+05:30",
+        "BypassCallingWindow": true
+    }
+}'
+```
+
+### Response
+
+**200 OK** — Call scheduled successfully:
+
+```json
+{
+  "message_id": "d4f7a8b2-1c3e-4a5f-9b6d-7e8f0a1b2c3d"
+}
+```
+
+Use the returned `message_id` to track the call status via your configured callback webhook.
+
+### Error Codes
+
+| Status | Code | Description |
+| :--- | :--- | :--- |
+| `400` | `invalid_argument` | Missing required fields (e.g., `CampaignID`, `PhoneNumber`) or campaign not found. |
+| `401` | `unauthenticated` | Invalid, expired, or missing auth token. |
+| `404` | `not_found` | The request URL is incorrect. Verify the endpoint path and your Client ID. |
+| `5XX` | `internal` | Internal server error. Retry the request after a short delay. |
 
 <Info>
-  **API Triggering:**
-  Your backend systems can now hit the Verloop Outreach Endpoint with the `campaign_id` and the specific user details (Phone Number, Custom Variables). The system will automatically apply the DND, Retry, and Recipe logic defined in the steps above.
+  Verloop uses [Twirp](https://twitchtv.github.io/twirp/docs/errors.html) for API serving. Refer to the Twirp error documentation for the full list of error codes and their meanings.
 </Info>

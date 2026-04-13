@@ -35,9 +35,22 @@ Upload your target list.
 Optimize your connection rates with smart dialing rules.
 
 <AccordionGroup>
-  <Accordion title="DND (Do Not Call) Hours">
-    Define the quiet hours (e.g., 9 PM to 9 AM).
-    * **Action:** Choose to **Discard** calls that fall in this window or **Schedule for later**.
+  <Accordion title="Working Window">
+    Control when outbound calls are placed by enabling the **Working window** toggle. When enabled, calls are only placed during the hours you define. Any calls that fall outside this window are treated as DND (Do Not Disturb).
+
+    **Choose a mode:**
+
+    * **Custom** — Manually set a start and end time (HH:MM) to define the exact window during which calls can be made.
+    * **Business hours** — Select a pre-configured business hours profile (e.g., *Global Business Hours*) from the dropdown. This is useful if your organization already manages business hour schedules centrally.
+
+    **What happens to calls during DND hours?**
+
+    * **Reschedule after DND** — Calls are paused and automatically queued for the next available slot once the working window opens. This is recommended as it helps reduce voicemail drops.
+    * **Discard the call** — Calls that fall outside the working window are permanently dropped.
+
+    <Info>
+      Calls are paused during DND hours. Rescheduling helps reduce voicemail drops.
+    </Info>
   </Accordion>
 
   <Accordion title="Ring Duration">
